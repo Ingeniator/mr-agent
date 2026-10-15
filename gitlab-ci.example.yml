@@ -1,0 +1,65 @@
+# Jobs to add to the reviewed project's .gitlab-ci.yml. Only scheduled pipelines on the
+# default branch run them, so the protected tokens never reach MR pipelines.
+# Setup and variables: README.md.
+stages:
+  - llm
+
+.mr-agent:
+  image: python:3.11
+  stage: llm
+  needs: []
+  variables:
+    # Clone of the project: the rules (CLAUDE.md) are read from it; MR commits are fetched
+    # by SHA without history.
+    GIT_DEPTH: "1"
+    # Pin a tag. Until mr-agent is published to PyPI, the jobs clone it at this ref.
+    MR_AGENT_REF: main
+    MR_AGENT_PROJECT: |
+      The project is <name>: <its components and what they are>.
+      Shared state the previous release still reads and writes while both run side by side:
+      <data layouts, database schema, APIs between deployables, config keys>.
+  before_script:
+    - git clone --quiet --depth 1 --branch "$MR_AGENT_REF" https://github.com/Ingeniator/mr-agent.git /tmp/mr-agent
+
+.llm-mr-job:
+  extends: .mr-agent
+  variables:
+    LLM_BASE_URL: https://<llm gateway>/v1
+    # Sent as is: no litellm-style provider prefix.
+    LLM_MODEL: gpt-4o
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $LLM_MR_BOT == "1"
+
+mr-description:
+  extends: .llm-mr-job
+  # A run that outlasts the interval must not overlap the next one.
+  resource_group: llm-mr-description
+  script:
+    - python3 /tmp/mr-agent/mr_description.py
+
+mr-review:
+  extends: .llm-mr-job
+  resource_group: llm-mr-review
+  script:
+    - python3 /tmp/mr-agent/mr_review.py
+
+# Weekly schedule with LLM_MR_STATS=1; needs no LLM key.
+mr-review-stats:
+  extends: .mr-agent
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $LLM_MR_STATS == "1"
+  script:
+    - python3 /tmp/mr-agent/mr_review_stats.py
+  artifacts:
+    when: always
+    expire_in: 1 year
+    paths:
+      - review-stats.json
+
+# Daily schedule with LLM_MR_HEALTH=1, owned by someone other than the LLM_MR_BOT=1 schedule.
+mr-bot-health:
+  extends: .mr-agent
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $LLM_MR_HEALTH == "1"
+  script:
+    - python3 /tmp/mr-agent/mr_bot_health.py

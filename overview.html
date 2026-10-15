@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LLM MR Bot</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!--
+  A picture of one run, step by step. README.md says where everything else lives.
+  Self-contained: no network, open the file in a browser. Name constants and functions,
+  never copy their values: tests/test_docs.py checks every name here against the code.
+-->
+<style>
+/* Layout: one reading column; sticky section nav on top. System fonts only, so the page works offline. */
+:root {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --ink: #1d2422;
+  --muted: #5c6763;
+  --line: #d9dedb;
+  --accent: #0f7a63;
+  --accent-soft: #dcefe9;
+  --add-bg: #e3f4e8; --add-fg: #1c6b35;
+  --del-bg: #fbe6e4; --del-fg: #a3302a;
+  --warn-bg: #fdf1d8; --warn-fg: #8a5a00;
+  --code-bg: #eef1ef;
+  --font-display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141917; --surface: #1b2220; --ink: #e3e9e6; --muted: #98a59f; --line: #2c3633;
+  --accent: #4cc3a4; --accent-soft: #1c3a32;
+  --add-bg: #173323; --add-fg: #7fd69a; --del-bg: #3a1d1b; --del-fg: #f19a92;
+  --warn-bg: #3a2d10; --warn-fg: #f1c26b; --code-bg: #111614; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #141917; --surface: #1b2220; --ink: #e3e9e6; --muted: #98a59f; --line: #2c3633;
+  --accent: #4cc3a4; --accent-soft: #1c3a32;
+  --add-bg: #173323; --add-fg: #7fd69a; --del-bg: #3a1d1b; --del-fg: #f19a92;
+  --warn-bg: #3a2d10; --warn-fg: #f1c26b; --code-bg: #111614; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 64px; display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 25px; font-weight: 700; }
+h3 { font-size: 17px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 18px; min-width: 0; }
+.lede { font-size: 17px; color: var(--muted); }
+
+nav.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); }
+nav.toc .inner { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 8px; display: flex; gap: 4px; overflow-x: auto; }
+nav.toc a { font-size: 13px; color: var(--muted); text-decoration: none; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--ink); background: var(--accent-soft); outline: none; }
+
+.jobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.job { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.job .name { font-family: var(--font-mono); color: var(--accent); font-size: 14px; font-weight: 600; }
+.job ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+
+.sim { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.sim-controls { display: flex; flex-wrap: wrap; gap: 14px 24px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.seg .lbl { font-size: 12px; color: var(--muted); margin-right: 6px; }
+.seg button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.trace { list-style: none; margin: 0; padding: 16px; display: grid; }
+.trace li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; padding-bottom: 14px; position: relative; align-items: start; animation: in 0.25s ease both; }
+.trace li > div { min-width: 0; }
+.trace li::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); margin: 7px 0 0 6px; }
+.trace li:not(:last-child)::after { content: ""; position: absolute; left: 10px; top: 20px; bottom: 0; width: 2px; background: var(--line); }
+.trace li.end::before { background: var(--ink); border-radius: 2px; }
+.trace li.skip::before { background: var(--muted); }
+.trace li.fail::before { background: var(--del-fg); }
+.trace .t { font-weight: 600; }
+.trace .d { color: var(--muted); font-size: 14px; }
+@keyframes in { from { transform: translateY(4px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .trace li { animation: none; } }
+.result { padding: 12px 16px; border-top: 1px solid var(--line); font-size: 14px; display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+.pill { font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+.pill.handled { background: var(--add-bg); color: var(--add-fg); }
+.pill.skipped { background: var(--code-bg); color: var(--muted); }
+.pill.failed { background: var(--del-bg); color: var(--del-fg); }
+
+.demo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 720px) { .demo { grid-template-columns: minmax(0, 1fr); } }
+pre.block { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.55; overflow-x: auto; }
+pre.block .ad { color: var(--add-fg); } pre.block .rm { color: var(--del-fg); }
+pre.block .fr { background: var(--warn-bg); color: var(--warn-fg); font-weight: 600; }
+pre.block .mu { color: var(--muted); }
+.caption { font-size: 13px; color: var(--muted); }
+
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+td:first-child { white-space: nowrap; }
+
+.guards { display: grid; gap: 10px; }
+.guard { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; }
+.guard .k { font-family: var(--font-mono); font-size: 12px; color: var(--accent); padding-top: 2px; }
+footer { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<nav class="toc" aria-label="Sections"><div class="inner">
+  <a href="#overview">Overview</a><a href="#jobs">Jobs</a><a href="#simulate">Run simulator</a><a href="#incremental">Incremental review</a><a href="#security">Security</a><a href="#failures">Failure handling</a>
+</div></nav>
+
+<div class="wrap">
+
+<header id="overview" style="display:grid;gap:16px">
+  <span class="eyebrow">mr-agent</span>
+  <h1>LLM bot for GitLab merge requests</h1>
+  <p class="lede">Two scheduled GitLab CI jobs that go over open MRs labelled <code>ai-review</code>. One writes an AI summary into the MR description, the other posts an incremental code review checked against the repo's <code>CLAUDE.md</code> rules. Standard library Python only.</p>
+  <p>Add the <code>ai-review</code> label to an MR to opt it in to both jobs, and remove it to stop. MRs without the label are never touched. In an MR, the sidebar's Labels field or a <code>/label ~ai-review</code> comment both work.</p>
+</header>
+
+<section id="jobs">
+  <span class="eyebrow">The jobs</span>
+  <h2>Two jobs, one set of helpers</h2>
+  <div class="jobs">
+    <div class="job">
+      <span class="name">mr-description</span>
+      <ul>
+        <li>Fixed sections: What, Why, Compatibility, How to test.</li>
+        <li>Block sits between <code>&lt;!-- ai-description:start head=SHA --&gt;</code> and <code>&lt;!-- ai-description:end --&gt;</code>. Text outside it is kept.</li>
+        <li>Appended on the first run, replaced after each push. Put empty markers in the description to choose where it goes.</li>
+        <li>If the LLM rejects the prompt, an earlier summary stays under a failure note.</li>
+        <li>Re-reads the MR after the LLM call and writes only if HEAD hasn't moved.</li>
+      </ul>
+    </div>
+    <div class="job">
+      <span class="name">mr-review</span>
+      <ul>
+        <li>Inline comments on diff lines plus a summary note, at most <code>MAX_FINDINGS</code> findings sorted by severity (blocker, major, minor).</li>
+        <li>The prompt includes the root <code>CLAUDE.md</code> and the <code>CLAUDE.md</code> of every touched component, read from <code>main</code>.</li>
+        <li>Incremental: each run reviews only what changed since the last reviewed HEAD, including after a force-push.</li>
+        <li>Findings that can't be attached to a new line go into the summary.</li>
+        <li>Posts nothing if HEAD moved while the LLM was answering.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="simulate">
+  <span class="eyebrow">Interactive</span>
+  <h2>What one scheduled run does to an MR</h2>
+  <p>Pick a job and the state of an MR to trace the code path through <code>describe()</code> or <code>review()</code>.</p>
+  <div class="sim">
+    <div class="sim-controls">
+      <div class="seg" role="group" aria-label="Job"><span class="lbl">Job</span>
+        <button id="job-desc" data-job="desc" aria-pressed="true">mr-description</button>
+        <button id="job-rev" data-job="rev" aria-pressed="false">mr-review</button>
+      </div>
+      <div class="seg" role="group" aria-label="MR state" id="scenarios"><span class="lbl">MR state</span></div>
+    </div>
+    <ol class="trace" id="trace"></ol>
+    <div class="result" id="result"></div>
+  </div>
+</section>
+
+<section id="incremental">
+  <span class="eyebrow">mr-review</span>
+  <h2>How a follow-up review marks new lines</h2>
+  <p>The prompt always contains the MR diff (<code>base_sha..head</code>), because GitLab accepts inline comments only on lines of the MR diff. On a follow-up review, the diff <code>last_reviewed..head</code> is intersected with the MR diff: added lines are matched by line number, and removed lines by line number too, mapped from <code>last_reviewed</code> to the MR base through <code>base_sha..last_reviewed</code>. Lines that survive get <code>*</code> and <code>~</code>. Files with nothing new are dropped from the prompt, and inline comments are allowed only on <code>*</code> lines.</p>
+  <div class="seg" role="group" aria-label="Review mode"><span class="lbl">Show</span>
+    <button id="mode-first" aria-pressed="false">First review</button>
+    <button id="mode-follow" aria-pressed="true">Follow-up review</button>
+  </div>
+  <div class="demo">
+    <div style="display:grid;gap:6px;min-width:0"><span class="caption">Annotated diff sent to the LLM</span><pre class="block" id="demo-diff"></pre></div>
+    <div style="display:grid;gap:6px;min-width:0"><span class="caption">Where findings land</span><pre class="block" id="demo-land"></pre></div>
+  </div>
+  <p class="caption">A line the MR added earlier and has since removed is no longer in the MR diff at all, so the prompt lists such lines separately. Changes that arrived by merging or rebasing onto the target branch drop out of the intersection. When nothing else changed, the marker in the last review note moves to the new HEAD without a new note. After a force-push the old HEAD is fetched by SHA; if that fails, or no MR version had it as its HEAD, the whole MR is reviewed again.</p>
+</section>
+
+<section id="security">
+  <span class="eyebrow">Threat model</span>
+  <h2>Why MR branches can't reach the tokens</h2>
+  <div class="guards">
+    <div class="guard"><span class="k">01</span><p><b>Schedule only.</b> The job's only rule is <code>CI_PIPELINE_SOURCE == "schedule"</code> on the default branch with <code>LLM_MR_BOT == "1"</code>. It never runs in MR pipelines. Polling instead of a webhook trigger costs up to one schedule interval of latency; <a href="adr/0001-own-mr-bot-on-a-schedule.md">ADR-0001</a> explains why.</p></div>
+    <div class="guard"><span class="k">02</span><p><b>Protected variables.</b> <code>LLM_API_KEY</code> and <code>MR_BOT_TOKEN</code> are masked and protected, so feature-branch pipelines don't receive them.</p></div>
+    <div class="guard"><span class="k">03</span><p><b>Pipeline variables locked.</b> "Minimum role to use pipeline variables" must be Maintainer or No one. Otherwise someone could start a run on <code>main</code> with their own <code>CI_API_V4_URL</code> or <code>GIT_CONFIG_*</code> and send the tokens elsewhere.</p></div>
+    <div class="guard"><span class="k">04</span><p><b>MR code is data.</b> MR commits are fetched by SHA and only diffed, never executed.</p></div>
+    <div class="guard"><span class="k">05</span><p><b>Rules come from main.</b> <code>CLAUDE.md</code> files are read from the checkout of the default branch, so an MR can't rewrite the rules it's reviewed against.</p></div>
+    <div class="guard"><span class="k">06</span><p><b>Markers only from the bot.</b> Review markers count only in notes the bot user wrote, so a quoted marker in someone else's comment can't move the review base.</p></div>
+    <div class="guard"><span class="k">07</span><p><b>No quick actions.</b> Every description and note the bot writes gets a space in front of any line that starts with <code>/</code>. This stops a diff from steering the model into emitting <code>/approve</code> or <code>/close</code>, which GitLab would run as the bot.</p></div>
+  </div>
+</section>
+
+<section id="failures">
+  <span class="eyebrow">Error handling</span>
+  <h2>What happens when something fails</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Event</th><th>Behaviour</th><th>Retried</th></tr></thead>
+    <tbody>
+      <tr><td>LLM rejects the prompt</td><td>HTTP 413, a 400 or 422 with an OpenAI error code for length or a content filter (<code>context_length_exceeded</code>, <code>content_filter</code>, …) or, from a gateway that sends no such code, a body that mentions them, empty <code>choices</code>, or <code>content: null</code>. Description: writes a failure note with this HEAD and keeps any earlier summary under it. Review: posts a note with <code>ai-review-failed head=SHA</code>, and the review base stays where it was. The job exits 1.</td><td>After the next push</td></tr>
+      <tr><td>Any other error on an MR</td><td>Wrong model, a malformed request, 401, 429 or 5xx from the LLM; a GitLab or git fetch error. The job exits 1 and one bot note per job and MR counts the failures on this HEAD (<code>ai-review-error</code> / <code>ai-description-error head=SHA attempts=N</code>). Until the retry time the MR is skipped and takes no slot.</td><td>After <code>ERROR_BACKOFF</code>, doubling up to <code>MAX_ERROR_BACKOFF</code>; at once after a push</td></tr>
+      <tr><td>HEAD moves during generation</td><td>Nothing is written. The next run handles the new HEAD.</td><td>Next run</td></tr>
+      <tr><td>Inline comment HTTP 400</td><td>The position was rejected, so the finding moves to the summary note.</td><td>—</td></tr>
+      <tr><td>Other error while posting inline</td><td>Inline posting stops and the remaining findings go to the summary with a ⚠️ line. The summary marker is already posted, so findings aren't lost and comments aren't duplicated.</td><td>—</td></tr>
+      <tr><td>Summary note update fails</td><td>The review is printed to the job log, then the error is re-raised.</td><td>—</td></tr>
+      <tr><td>Run overruns the schedule interval</td><td>Each job has its own <code>resource_group</code>, so two runs of the same job never overlap.</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>Setup, limits, environment and local runs: <a href="README.md"><code>README.md</code></a> in this folder.</footer>
+</div>
+
+<script>
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---- run simulator
+const S = (t, d, k = '') => ({ t, d, k });
+const start = [
+  S('Scheduled pipeline on main', 'Rule matches: source = schedule, default branch, LLM_MR_BOT = 1. Shallow clone of main.'),
+  S('List open MRs labelled ai-review', 'Most recently updated first. At most MAX_MRS_PER_RUN MRs that reach the LLM per run.'),
+];
+const SCEN = {
+  desc: {
+    'New MR': [[...start,
+      S('mr.get() → diff_refs', 'head_sha differs from the head= in the start marker (no marker yet).'),
+      S('fetch_commits(base, head)', 'Fetched by SHA, without history.'),
+      S('git diff base..head', 'Non-empty. Commit list (from the API), --stat and the diff, truncated at MAX_PROMPT_DIFF_CHARS, go into the prompt.'),
+      S('chat(PROMPT)', 'Returns What / Why / Compatibility / How to test.'),
+      S('Re-read the MR', 'HEAD is unchanged, so merge_block() appends the block after the description.', 'end'),
+    ], 'handled', 'Description now ends with <!-- ai-description:start head=… --> … <!-- ai-description:end -->.'],
+    'No new commits': [[...start,
+      S('mr.get() → diff_refs', 'head_sha equals the head= stored in the start marker.'),
+      S('“… is already described.”', 'No fetch and no LLM call.', 'skip'),
+    ], 'skipped', 'Doesn\'t count toward MAX_MRS_PER_RUN.'],
+    'Pushed after description': [[...start,
+      S('mr.get() → diff_refs', 'The marker holds the old head and the MR has a new one.'),
+      S('fetch + diff + chat', 'Whole MR diff again (base..head), not incremental.'),
+      S('merge_block()', 'Finds the start/end pair and replaces only that block. Text outside it is kept.', 'end'),
+    ], 'handled', 'The block is rewritten. Marker text echoed by the model is stripped first.'],
+    'LLM rejects prompt': [[...start,
+      S('fetch + diff', 'As usual.'),
+      S('chat() → HTTP 413', 'Raised as LLMRejected.', 'fail'),
+      S('Write failure note with this head', 'The earlier summary, if any, stays below it, marked as describing an earlier version.', 'end'),
+    ], 'failed', 'Job exits 1. The next run sees head= matching and skips it until a push.'],
+    'Push during generation': [[...start,
+      S('fetch + diff + chat', 'Takes a while.'),
+      S('Re-read the MR', 'head_sha has changed in the meantime.', 'skip'),
+      S('Nothing written', '“MR head moved on during generation.”', 'end'),
+    ], 'handled', 'Counts as handled. The next run describes the new head.'],
+  },
+  rev: {
+    'New MR': [[...start,
+      S('review_markers()', 'Bot user\'s own notes only. No ai-review marker found, so the whole MR is reviewed.'),
+      S('fetch_commits + MR diff', 'parse_diff() numbers lines and collects the commentable ones per file.'),
+      S('chat(PROMPT + CLAUDE.md rules)', 'Root CLAUDE.md plus the touched components\' CLAUDE.md, from main, capped at MAX_RULES_CHARS.'),
+      S('parse_review()', 'Extracts the outer {…}, accepts "42" as 42, rejects bools, sorts by severity, keeps MAX_FINDINGS.'),
+      S('Re-check HEAD', 'Unchanged, so posting goes ahead.'),
+      S('Post summary note first', '<!-- ai-review head=SHA --> + “Review in progress…”.'),
+      S('Inline discussions', 'For findings on lines in the MR diff. Rejected positions move to the summary.'),
+      S('Update summary note', 'Summary, unplaced findings and the inline count.', 'end'),
+    ], 'handled', 'Scope: “the whole MR”.'],
+    'Pushed after review': [[...start,
+      S('review_markers()', 'since = last reviewed head.'),
+      S('Merge base from the API', 'The MR base at the time of the last review, to tell the MR\'s own changes from the target\'s.'),
+      S('since_last_review()', 'diff since..head ∩ MR diff gives the * and ~ lines. Untouched files are dropped from the prompt. Lines the MR added and later removed are listed separately.'),
+      S('chat(PROMPT + FOLLOW_UP)', 'Asks to review only the * / ~ changes.'),
+      S('Inline only on * lines', 'Other findings go to the summary, so earlier comments aren\'t repeated.', 'end'),
+    ], 'handled', 'Scope: `since..head`.'],
+    'Target branch merged in': [[...start,
+      S('review_markers()', 'since = last reviewed head.'),
+      S('since_last_review()', 'Every change in since..head came from the target branch, so the intersection is empty.', 'skip'),
+      S('Move marker to new head', 'The last review note\'s marker is updated in place. No new note, no LLM call.', 'end'),
+    ], 'skipped', 'The next run sees the new head as reviewed.'],
+    'Force-pushed': [[...start,
+      S('review_markers()', 'since = old head, which is no longer an ancestor.'),
+      S('fetch_commit(since)', 'Fetched by SHA. GitLab keeps MR version commits.'),
+      S('since_last_review()', 'Same intersection. Changes from the rebased-in target branch drop out.'),
+      S('Incremental review', 'As for a normal push.', 'end'),
+    ], 'handled', 'If the SHA can\'t be fetched, the whole MR is reviewed again.'],
+    'LLM rejects prompt': [[...start,
+      S('Build prompt', 'As usual.'),
+      S('chat() → content: null', 'Raised as LLMRejected.', 'fail'),
+      S('Post <!-- ai-review-failed head=SHA -->', 'Separate marker, so the review base doesn\'t move.', 'end'),
+    ], 'failed', 'Skipped until the next push. Unreviewed commits stay in scope.'],
+    'No new commits': [[...start,
+      S('review_markers()', 'since == head.'),
+      S('“… is already reviewed.”', 'No fetch and no LLM call.', 'skip'),
+    ], 'skipped', 'Doesn\'t count toward MAX_MRS_PER_RUN.'],
+  },
+};
+let job = 'desc', scen = 'New MR';
+const scWrap = document.getElementById('scenarios');
+function drawScenarios() {
+  scWrap.querySelectorAll('button').forEach(b => b.remove());
+  if (!SCEN[job][scen]) scen = 'New MR';
+  Object.keys(SCEN[job]).forEach((k, i) => {
+    const b = document.createElement('button');
+    b.id = `sc-${job}-${i}`; b.textContent = k; b.setAttribute('aria-pressed', String(k === scen));
+    b.addEventListener('click', () => { scen = k; drawScenarios(); });
+    scWrap.appendChild(b);
+  });
+  const [steps, out, note] = SCEN[job][scen];
+  document.getElementById('trace').innerHTML = steps.map((s, i) =>
+    `<li class="${s.k}" style="animation-delay:${i * 40}ms"><div><div class="t">${esc(s.t)}</div><div class="d">${esc(s.d)}</div></div></li>`).join('');
+  document.getElementById('result').innerHTML = `<span class="pill ${out}">Outcome.${out.toUpperCase()}</span><span>${esc(note)}</span>`;
+}
+document.querySelectorAll('[data-job]').forEach(b => b.addEventListener('click', () => {
+  job = b.dataset.job;
+  document.querySelectorAll('[data-job]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  drawScenarios();
+}));
+drawScenarios();
+
+// ---- incremental demo
+const DEMO = {
+  first: {
+    diff: [
+      ['h', '@@ -10,6 +10,9 @@ def load(path: str) -> Config:'],
+      ['c', '   10   data = read(path)'],
+      ['a', '   11 + if not data:'],
+      ['a', '   12 +     raise ValueError(path)'],
+      ['c', '   13   cfg = parse(data)'],
+      ['r', '      -     validate(cfg)'],
+      ['a', '   14 + cfg.cache = True'],
+      ['c', '   15   return cfg'],
+    ],
+    land: 'Inline allowed on:  11 12 13 14 15  (any line in the MR diff)\nPrompt focus:       whole MR\nScope in note:      “the whole MR”',
+  },
+  follow: {
+    diff: [
+      ['m', 'Lines the MR had added earlier and removed since the previous review:'],
+      ['m', '--- config.py'],
+      ['f', '      ~ assert cfg.version'],
+      ['m', ''],
+      ['h', '@@ -10,6 +10,9 @@ def load(path: str) -> Config:'],
+      ['c', '   10   data = read(path)'],
+      ['a', '   11 + if not data:'],
+      ['a', '   12 +     raise ValueError(path)'],
+      ['c', '   13   cfg = parse(data)'],
+      ['f', '      ~     validate(cfg)'],
+      ['f', '   14 * cfg.cache = True'],
+      ['c', '   15   return cfg'],
+    ],
+    land: 'Inline allowed on:  14              (* lines only)\nFinding on 11–12:   → summary note (already reviewed)\nFinding on ~ line:  → nearest numbered line, usually summary\nScope in note:      `3f9a21c0..8be4d7a1`',
+  },
+};
+function drawDemo(mode) {
+  document.getElementById('mode-first').setAttribute('aria-pressed', String(mode === 'first'));
+  document.getElementById('mode-follow').setAttribute('aria-pressed', String(mode === 'follow'));
+  const cls = { h: '', c: '', a: 'ad', r: 'rm', f: 'fr', m: 'mu' };
+  document.getElementById('demo-diff').innerHTML = DEMO[mode].diff.map(([k, t]) => cls[k] ? `<span class="${cls[k]}">${esc(t)}</span>` : esc(t)).join('\n');
+  document.getElementById('demo-land').textContent = DEMO[mode].land;
+}
+document.getElementById('mode-first').addEventListener('click', () => drawDemo('first'));
+document.getElementById('mode-follow').addEventListener('click', () => drawDemo('follow'));
+drawDemo('follow');
+</script>
+</body>
+</html>

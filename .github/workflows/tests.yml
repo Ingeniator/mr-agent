@@ -1,0 +1,18 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python3 -m unittest discover -b -s tests -t .
+      - run: python3 -m pip install --quiet basedpyright==1.40.2
+      # Scripts without warnings; tests may have warnings (unused mock results and the like), not errors.
+      - run: basedpyright --pythonversion 3.11 --warnings *.py && basedpyright --pythonversion 3.11 tests/*.py
