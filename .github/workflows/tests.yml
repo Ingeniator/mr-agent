@@ -15,5 +15,7 @@ jobs:
       - run: python3 -m unittest discover -b -s tests -t .
       - run: python3 -m pip install --quiet basedpyright==1.40.2
       # Scripts without warnings; tests may have warnings (unused mock results and the like), not errors.
-      # basedpyright fails on warnings by default, so the tests are checked at --level error.
-      - run: basedpyright --pythonversion 3.11 --warnings *.py && basedpyright --pythonversion 3.11 --level error tests/*.py
+      - run: basedpyright --pythonversion 3.11 --warnings *.py
+      # basedpyright fails on warnings by default, hence --level error; with GITHUB_ACTIONS set
+      # it ignores --level (verified with 1.40.2), so the variable is cleared for this step.
+      - run: GITHUB_ACTIONS= basedpyright --pythonversion 3.11 --level error tests/*.py
