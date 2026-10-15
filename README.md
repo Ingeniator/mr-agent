@@ -452,5 +452,5 @@ Standard library only: the jobs run on the CI image's bare `python3`.
 
 ```sh
 python3 -m unittest discover -b -s tests -t .
-basedpyright --pythonversion 3.11 --warnings *.py && basedpyright --pythonversion 3.11 tests/*.py
+basedpyright --pythonversion 3.11 --warnings *.py && basedpyright --pythonversion 3.11 --level error tests/*.py
 ```
